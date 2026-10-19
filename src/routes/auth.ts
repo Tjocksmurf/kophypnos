@@ -50,7 +50,8 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       const [recent] = await db.select({ n: count() }).from(loginCodes).where(and(eq(loginCodes.userId, user.id), gte(loginCodes.createdAt, since)));
       if ((recent?.n ?? 0) >= 3) return reply.send({ ok: true });
 
-      const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+      const code =
+        config.testLogin?.phone === phone.e164 ? config.testLogin.code : String(randomInt(0, 1_000_000)).padStart(6, "0");
       const salt = randomBytes(8).toString("hex");
       await db.update(loginCodes).set({ usedAt: new Date() }).where(and(eq(loginCodes.userId, user.id), isNull(loginCodes.usedAt)));
       await db.insert(loginCodes).values({

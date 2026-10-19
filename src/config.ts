@@ -42,6 +42,9 @@ const schema = z.object({
 
   // Dev conveniences: print WhatsApp messages to the log instead of sending.
   WHATSAPP_DRY_RUN: bool,
+  // Testing without WhatsApp: this number always gets this code. Ignored unless dry-run.
+  TEST_LOGIN_PHONE: z.string().regex(/^\+\d{6,15}$/, "E.164, e.g. +61400000000").or(z.literal("")).optional(),
+  TEST_LOGIN_CODE: z.string().regex(/^\d{6}$/, "6 digits").or(z.literal("")).optional(),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -75,6 +78,10 @@ export const config = {
     },
     dryRun: env.WHATSAPP_DRY_RUN || !env.TWILIO_ACCOUNT_SID,
   },
+  testLogin:
+    (env.WHATSAPP_DRY_RUN || !env.TWILIO_ACCOUNT_SID) && env.TEST_LOGIN_PHONE && env.TEST_LOGIN_CODE
+      ? { phone: env.TEST_LOGIN_PHONE, code: env.TEST_LOGIN_CODE }
+      : null,
   anthropic: {
     apiKey: env.ANTHROPIC_API_KEY,
     model: env.ANTHROPIC_MODEL,
