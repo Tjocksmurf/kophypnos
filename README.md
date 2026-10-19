@@ -8,7 +8,7 @@ Full spec: see the "Page Monitor — Product & Technical Spec" doc.
 
 ## Stack
 
-- Node 22 + TypeScript, Fastify, Postgres via Drizzle ORM (pure JS, no engine binaries)
+- Node 22 + TypeScript, Fastify, Postgres via Drizzle ORM (pure JS, no engine binaries), Playwright for JS-rendered pages, Sentry optional
 - One codebase, two Railway services: `web` (API + built React app) and `worker` (scheduler + fetcher)
 - Twilio WhatsApp Business API for login codes and alerts
 - Claude API (Anthropic SDK) for turning a sentence into a rule, judging ambiguous diffs, and relocating a target when a page layout changes
@@ -71,9 +71,20 @@ Twilio: create WhatsApp content templates matching the bodies in `src/core/whats
 
 A rule is JSON: a `target` (`selector` with CSS + text anchors, `region` between two text anchors, or `page`), an `extract` (`number`, `text`, `count`, `list`) and a `condition` (`changed`, `contains`, `not_contains`, `less_than`, `greater_than`, `equals`, `new_item`). Everything is evaluated in code; the LLM only creates rules, judges small page-level diffs, and relocates lost selectors. Threshold rules fire when the threshold is crossed, not on every check while it holds.
 
-## Not yet built (phase 3–4 of the spec)
+## JS-rendered pages
 
-- Playwright fallback for JS-rendered pages (`needs_browser` is in the schema; fetch currently refuses "thin" pages with a warning)
-- Sentry
-- Staging environment / Twilio sandbox wiring
-- Test fixtures for rule quality
+When the static HTML has almost no text, the preview retries with headless Chromium (Playwright). Monitors created from such a preview are marked `needs_browser` and always fetched with the browser, hourly or daily only, at most 2 per user, with `BROWSER_CONCURRENCY` contexts in flight at once. A monitor whose target disappears from the static DOM is also tried once in the browser before being marked stale. The runtime Docker image is Playwright's, so Chromium is present on Railway; locally, if Chromium isn't installed, browser fetches simply report "not available" and everything else works.
+
+## Errors and staging
+
+Set `SENTRY_DSN` to report unhandled errors from both services (tagged with `service`, `monitorId`, `userId`). For staging, create a second Railway environment from the `staging` branch with its own Postgres plugin and point `TWILIO_WHATSAPP_FROM` at the Twilio sandbox number; the same `railway.*.json` files apply.
+
+## Rule-quality fixtures
+
+`src/core/fixtures/*.html` are synthetic pages (product, listing, news) with tests in `src/core/fixtures.test.ts` that pin selector building, number parsing, list/new-item detection and noise handling. When a real page breaks a rule, add a reduced copy of its structure as a fixture and make it pass.
+
+## Not yet built
+
+- Richer conditions (percent change, hysteresis), multi-target rules
+- Proxy rotation for sites that block datacenter IPs
+- Paid plans / Stripe

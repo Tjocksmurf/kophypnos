@@ -6,17 +6,19 @@ export function IntervalPicker({
   dailyAt,
   onChange,
   disabled,
+  allowFast = true,
 }: {
   interval: Interval;
   dailyAt: number;
   onChange: (interval: Interval, dailyAt: number) => void;
   disabled?: boolean;
+  allowFast?: boolean;
 }) {
   return (
     <div className="inline">
       <div className="seg" role="radiogroup" aria-label="Check interval">
         {(["30m", "1h", "1d"] as Interval[]).map((i) => (
-          <button key={i} type="button" role="radio" aria-checked={interval === i} className={interval === i ? "on" : ""} disabled={disabled} onClick={() => onChange(i, dailyAt)}>
+          <button key={i} type="button" role="radio" aria-checked={interval === i} className={interval === i ? "on" : ""} disabled={disabled || (i === "30m" && !allowFast)} title={i === "30m" && !allowFast ? "Browser-rendered pages are checked hourly or daily" : undefined} onClick={() => onChange(i, dailyAt)}>
             {i === "30m" ? "30 min" : i === "1h" ? "Hourly" : "Daily"}
           </button>
         ))}

@@ -3,6 +3,7 @@ import { db, schema } from "../db/index.js";
 import { config } from "../config.js";
 import { logger } from "../logger.js";
 import { fetchPage } from "./fetch.js";
+import { fetchWithBrowser } from "./browser.js";
 import { extractPage } from "./extract.js";
 import { evaluate, observe, ruleSchema, type Rule } from "./rules.js";
 import { diffLines, summariseDiff } from "./diff.js";
@@ -53,11 +54,14 @@ export async function runCheck(monitorId: string, opts: { manual?: boolean } = {
   };
 
   // ---- fetch (with one in-run retry for network errors / 5xx)
-  let fetched = await fetchPage(monitor.url, { etag: monitor.etag, lastModified: monitor.lastModified });
+  const doFetch = () =>
+    monitor.needsBrowser ? fetchWithBrowser(monitor.url) : fetchPage(monitor.url, { etag: monitor.etag, lastModified: monitor.lastModified });
+  let fetched = await doFetch();
   if (fetched.status === "error" && (fetched.httpStatus === null || fetched.httpStatus >= 500)) {
     await sleep(10_000);
-    fetched = await fetchPage(monitor.url, { etag: monitor.etag, lastModified: monitor.lastModified });
+    fetched = await doFetch();
   }
+  let switchedToBrowser = false;
 
   if (fetched.status === "not_modified") {
     return finish(
@@ -97,8 +101,24 @@ export async function runCheck(monitorId: string, opts: { manual?: boolean } = {
   }
 
   // ---- extract + observe
-  const page = extractPage(fetched.html, fetched.finalUrl);
+  let page = extractPage(fetched.html, fetched.finalUrl);
   let obs = observe(rule, page.html, page.text);
+
+  // ---- the static DOM lost the target: maybe the page now renders it client-side
+  if (!obs.located && !monitor.needsBrowser && page.text.length < 200) {
+    const rendered = await fetchWithBrowser(monitor.url);
+    if (rendered.status === "ok") {
+      const rpage = extractPage(rendered.html, rendered.finalUrl);
+      const robs = observe(rule, rpage.html, rpage.text);
+      if (robs.located) {
+        fetched = rendered;
+        page = rpage;
+        obs = robs;
+        switchedToBrowser = true;
+        log.info("switched monitor to browser fetching");
+      }
+    }
+  }
 
   // ---- relocation when the selector is gone
   if (!obs.located && rule.target.kind === "selector") {
@@ -183,6 +203,10 @@ export async function runCheck(monitorId: string, opts: { manual?: boolean } = {
     faviconUrl: monitor.faviconUrl ?? page.faviconUrl,
   };
   if (monitor.status === "stale") mpatch.status = "active";
+  if (switchedToBrowser) {
+    mpatch.needsBrowser = true;
+    if (monitor.interval === "30m") mpatch.interval = "1h"; // browser monitors run hourly at most
+  }
   if (moved || monitor.lastValue === null) {
     mpatch.lastValue = obs.value;
     mpatch.previousValue = monitor.lastValue;

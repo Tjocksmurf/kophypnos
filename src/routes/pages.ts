@@ -4,6 +4,7 @@ import { and, eq, gte, count, sum } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
 import { config } from "../config.js";
 import { fetchPage } from "../core/fetch.js";
+import { fetchWithBrowser } from "../core/browser.js";
 import { extractPage, selectorForId, locateSelector } from "../core/extract.js";
 import { parseUrl, UrlError } from "../core/url.js";
 import { proposeRule, LlmUnavailable } from "../core/llm.js";
@@ -28,13 +29,26 @@ export async function pageRoutes(app: FastifyInstance): Promise<void> {
     } catch (e) {
       return reply.code(400).send({ error: { code: "bad_url", message: e instanceof UrlError ? e.message : "Invalid URL." } });
     }
-    const fetched = await fetchPage(url.toString());
+    let fetched = await fetchPage(url.toString());
     if (fetched.status === "error" || fetched.status === "not_modified") {
       return reply.code(422).send({
         error: { code: "fetch_failed", message: fetched.error ?? "Could not fetch that page.", http_status: fetched.httpStatus },
       });
     }
-    const page = extractPage(fetched.html, fetched.finalUrl);
+    let page = extractPage(fetched.html, fetched.finalUrl);
+    let needsBrowser = false;
+    // Thin static DOM → the content is probably rendered client-side; try a headless browser once.
+    if (fetched.status === "ok" && page.text.length < 200) {
+      const rendered = await fetchWithBrowser(fetched.finalUrl);
+      if (rendered.status === "ok") {
+        const rpage = extractPage(rendered.html, rendered.finalUrl);
+        if (rpage.text.length > page.text.length * 2 && rpage.text.length >= 200) {
+          fetched = rendered;
+          page = rpage;
+          needsBrowser = true;
+        }
+      }
+    }
     const fetchStatus = fetched.status === "blocked" ? "blocked" : page.text.length < 200 ? "thin" : "ok";
     const [row] = await db
       .insert(previews)
@@ -48,6 +62,7 @@ export async function pageRoutes(app: FastifyInstance): Promise<void> {
         html: page.html,
         httpStatus: fetched.httpStatus,
         fetchStatus,
+        needsBrowser,
         etag: fetched.etag,
         lastModified: fetched.lastModified,
       })
@@ -60,14 +75,17 @@ export async function pageRoutes(app: FastifyInstance): Promise<void> {
       excerpt: page.text.slice(0, EXCERPT_CHARS),
       text_length: page.text.length,
       fetch_status: fetchStatus,
+      needs_browser: needsBrowser,
       http_status: fetched.httpStatus,
       fetch_ms: fetched.ms,
       message:
         fetchStatus === "blocked"
           ? "This site seems to block automated checks. You can still try, but checks may fail."
           : fetchStatus === "thin"
-            ? "This page has very little readable text. It may load its content with JavaScript, which isn't supported yet."
-            : null,
+            ? "This page has very little readable text. It may load its content with JavaScript in a way that can't be rendered here."
+            : needsBrowser
+              ? "This page renders in the browser, so it's checked with a headless browser: hourly or daily only."
+              : null,
     };
   });
 

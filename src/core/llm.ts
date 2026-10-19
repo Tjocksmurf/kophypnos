@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { config } from "../config.js";
 import { conditionSchema, extractSchema, type Rule, ruleSchema, describeRule } from "./rules.js";
-import { selectorForId, locateSelector } from "./extract.js";
+import { selectorForId, generaliseSelector } from "./extract.js";
 
 const client = config.anthropic.apiKey ? new Anthropic({ apiKey: config.anthropic.apiKey }) : null;
 
@@ -170,20 +170,6 @@ export async function proposeRule(input: {
   if (!safe.success) return { rule: null, observedValue: null, confidence: 0, note: "Rule failed validation.", usage };
   if (!safe.data.summary) safe.data.summary = describeRule(safe.data);
   return { rule: safe.data, observedValue: p.observed_value ?? null, confidence: p.confidence, note: p.note ?? null, usage };
-}
-
-/** Drop :nth-of-type from the last segment so a selector for one list entry matches all entries. */
-export function generaliseSelector(css: string, html: string): string {
-  const parts = css.split(" > ");
-  for (let i = parts.length - 1; i >= 0; i--) {
-    const stripped = parts[i]!.replace(/:nth-of-type\(\d+\)/, "");
-    if (stripped !== parts[i]) {
-      const candidate = [...parts.slice(0, i), stripped, ...parts.slice(i + 1)].join(" > ");
-      const hit = locateSelector(html, candidate);
-      if (hit && hit.count > 1) return candidate;
-    }
-  }
-  return css;
 }
 
 // ---------- diff judging ----------

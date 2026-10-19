@@ -8,6 +8,13 @@
       "when": 1792423825303,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792428839500,
+      "tag": "0001_previews_needs_browser",
+      "breakpoints": true
     }
   ]
 }

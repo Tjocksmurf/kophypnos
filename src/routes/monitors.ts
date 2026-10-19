@@ -35,11 +35,18 @@ export async function monitorRoutes(app: FastifyInstance): Promise<void> {
     if (!preview) return reply.code(404).send({ error: { code: "not_found", message: "That preview has expired. Paste the URL again." } });
 
     // Limits
-    const mine = await db.select({ interval: monitors.interval }).from(monitors).where(eq(monitors.userId, user.id));
+    const mine = await db.select({ interval: monitors.interval, needsBrowser: monitors.needsBrowser }).from(monitors).where(eq(monitors.userId, user.id));
     if (mine.length >= config.limits.monitorsPerUser) {
       return reply.code(403).send({ error: { code: "limit", message: `You can have up to ${config.limits.monitorsPerUser} monitors.` } });
     }
-    if (body.data.interval === "30m" && mine.filter((m) => m.interval === "30m").length >= config.limits.fastMonitorsPerUser) {
+    let interval = body.data.interval;
+    if (preview.needsBrowser) {
+      if (mine.filter((m) => m.needsBrowser).length >= config.limits.browserMonitorsPerUser) {
+        return reply.code(403).send({ error: { code: "limit", message: `Up to ${config.limits.browserMonitorsPerUser} browser-rendered pages can be monitored.` } });
+      }
+      if (interval === "30m") interval = "1h";
+    }
+    if (interval === "30m" && mine.filter((m) => m.interval === "30m").length >= config.limits.fastMonitorsPerUser) {
       return reply.code(403).send({ error: { code: "limit", message: `Up to ${config.limits.fastMonitorsPerUser} monitors can run every 30 minutes.` } });
     }
 
@@ -56,9 +63,10 @@ export async function monitorRoutes(app: FastifyInstance): Promise<void> {
           host: preview.host,
           title: preview.title,
           faviconUrl: preview.faviconUrl,
-          interval: body.data.interval,
-          dailyAt: body.data.interval === "1d" ? (body.data.daily_at ?? 8 * 60) : null,
+          interval,
+          dailyAt: interval === "1d" ? (body.data.daily_at ?? 8 * 60) : null,
           nextRunAt: new Date(), // first check right away
+          needsBrowser: preview.needsBrowser,
           lastValue: obs.located ? obs.value : null,
           etag: preview.etag,
           lastModified: preview.lastModified,
@@ -117,6 +125,9 @@ export async function monitorRoutes(app: FastifyInstance): Promise<void> {
     if (d.title) patch.title = d.title;
     if (d.interval || d.daily_at !== undefined) {
       const interval = d.interval ?? m.interval;
+      if (interval === "30m" && m.needsBrowser) {
+        return reply.code(403).send({ error: { code: "limit", message: "Browser-rendered pages are checked hourly or daily." } });
+      }
       if (interval === "30m" && m.interval !== "30m") {
         const [fast] = await db.select({ n: count() }).from(monitors).where(and(eq(monitors.userId, req.user!.id), eq(monitors.interval, "30m")));
         if ((fast?.n ?? 0) >= config.limits.fastMonitorsPerUser) {
@@ -224,6 +235,7 @@ function summarise(m: schema.Monitor, rule: schema.Rule | undefined) {
     last_value: m.lastValue,
     previous_value: m.previousValue,
     next_run_at: m.nextRunAt,
+    needs_browser: m.needsBrowser,
     consecutive_errors: m.consecutiveErrors,
     consecutive_blocks: m.consecutiveBlocks,
     created_at: m.createdAt,

@@ -1,0 +1,1 @@
+ALTER TABLE "previews" ADD COLUMN "needs_browser" boolean DEFAULT false NOT NULL;

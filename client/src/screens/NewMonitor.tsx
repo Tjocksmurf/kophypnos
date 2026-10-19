@@ -58,6 +58,7 @@ export function NewMonitor() {
       .then((p) => {
         if (!alive) return;
         setPreview(p);
+        if (p.needs_browser) setInterval_("1h");
         setTimeout(() => promptRef.current?.focus(), 50);
       })
       .catch((e) => alive && setPreviewError(e instanceof ApiError ? e.message : "Could not fetch that page."))
@@ -268,7 +269,7 @@ export function NewMonitor() {
           {proposal?.note && rule ? <p className="notice">{proposal.note}</p> : null}
 
           <h2>Check</h2>
-          <IntervalPicker interval={interval} dailyAt={dailyAt} onChange={(i, d) => { setInterval_(i); setDailyAt(d); }} />
+          <IntervalPicker interval={interval} dailyAt={dailyAt} allowFast={!preview?.needs_browser} onChange={(i, d) => { setInterval_(i); setDailyAt(d); }} />
 
           <div className="actions">
             <button className="btn accent" onClick={create} disabled={busy !== null}>

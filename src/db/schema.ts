@@ -273,6 +273,7 @@ export const previews = pgTable(
     html: text("html").notNull(),
     httpStatus: integer("http_status"),
     fetchStatus: text("fetch_status").notNull(), // ok | thin | blocked | error
+    needsBrowser: boolean("needs_browser").notNull().default(false),
     etag: text("etag"),
     lastModified: text("last_modified"),
     createdAt: createdAt(),

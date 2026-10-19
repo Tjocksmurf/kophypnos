@@ -86,6 +86,7 @@ export interface MonitorSummary {
   last_value: string | null;
   previous_value: string | null;
   next_run_at: string;
+  needs_browser: boolean;
   consecutive_errors: number;
   consecutive_blocks: number;
   created_at: string;
@@ -117,6 +118,7 @@ export interface Preview {
   excerpt: string;
   text_length: number;
   fetch_status: "ok" | "thin" | "blocked";
+  needs_browser: boolean;
   http_status: number | null;
   message: string | null;
 }

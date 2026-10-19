@@ -14,6 +14,7 @@ const schema = z.object({
   DB_POOL_SIZE: z.coerce.number().default(10),
   SESSION_SECRET: z.string().min(16),
   LOG_LEVEL: z.string().default("info"),
+  SENTRY_DSN: z.string().optional(),
 
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),
@@ -60,6 +61,7 @@ export const config = {
   dbPoolSize: env.DB_POOL_SIZE,
   sessionSecret: env.SESSION_SECRET,
   logLevel: env.LOG_LEVEL,
+  sentryDsn: env.SENTRY_DSN,
   twilio: {
     accountSid: env.TWILIO_ACCOUNT_SID,
     authToken: env.TWILIO_AUTH_TOKEN,

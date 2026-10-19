@@ -120,6 +120,7 @@ export function MonitorDetail() {
           interval={m.interval}
           dailyAt={m.daily_at ?? 8 * 60}
           disabled={busy !== null}
+          allowFast={!m.needs_browser}
           onChange={(i: Interval, dailyAt) => act("interval", () => api.patch(`/monitors/${m.id}`, { interval: i, daily_at: i === "1d" ? dailyAt : null }))}
         />
       </div>

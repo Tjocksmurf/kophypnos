@@ -1,3 +1,5 @@
+import { initSentry, captureError } from "./sentry.js";
+initSentry("worker");
 import http from "node:http";
 import { sql } from "drizzle-orm";
 import { config } from "./config.js";
@@ -6,6 +8,7 @@ import { closeDb, db, pool, runMigrations } from "./db/index.js";
 import { runCheck } from "./core/check.js";
 import { flushDigests } from "./core/notify.js";
 import { intervalMs } from "./core/schedule.js";
+import { closeBrowser } from "./core/browser.js";
 
 const log = logger.child({ service: "worker" });
 let stopping = false;
@@ -56,6 +59,7 @@ async function runBatch(due: Due[]): Promise<void> {
         log.info({ monitorId: m.id, outcome: r.outcome, alerted: r.alerted, ms: Date.now() - started }, "check");
       } catch (e) {
         log.error({ err: e, monitorId: m.id }, "check crashed");
+        captureError(e, { monitorId: m.id });
         const minutes = Math.round(intervalMs(m.interval) / 60000);
         await db.execute(sql`update monitors set next_run_at = now() + (${minutes} * interval '1 minute') where id = ${m.id}`);
       }
@@ -90,6 +94,7 @@ async function loop(): Promise<void> {
       await housekeeping();
     } catch (e) {
       log.error({ err: e }, "loop error");
+      captureError(e, { where: "loop" });
     }
     await sleep(config.worker.pollMs);
   }
@@ -145,6 +150,7 @@ async function main() {
     log.info({ signal }, "worker stopping");
     stopping = true;
     health.close();
+    await closeBrowser();
     setTimeout(async () => {
       await closeDb();
       process.exit(0);

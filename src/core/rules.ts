@@ -179,12 +179,14 @@ export function evaluate(rule: Rule, current: Observation, previousValue: string
     case "changed":
       return { moved, met: moved, reason: moved ? `Changed from "${short(previousValue)}" to "${short(cur)}"` : "No change" };
     case "contains": {
-      const met = cur.toLowerCase().includes(c.value.toLowerCase());
-      return { moved, met: met && (moved || previousValue === null), reason: met ? `Now contains "${c.value}"` : `Does not contain "${c.value}"` };
+      const test = (v: string) => v.toLowerCase().includes(c.value.toLowerCase());
+      const met = test(cur);
+      return { moved, met: met && became(previousValue, test), reason: met ? `Now contains "${c.value}"` : `Does not contain "${c.value}"` };
     }
     case "not_contains": {
-      const met = !cur.toLowerCase().includes(c.value.toLowerCase());
-      return { moved, met: met && (moved || previousValue === null), reason: met ? `No longer contains "${c.value}"` : `Still contains "${c.value}"` };
+      const test = (v: string) => !v.toLowerCase().includes(c.value.toLowerCase());
+      const met = test(cur);
+      return { moved, met: met && became(previousValue, test), reason: met ? `No longer contains "${c.value}"` : `Still contains "${c.value}"` };
     }
     case "less_than": {
       const met = num !== null && num < c.value;
@@ -195,8 +197,9 @@ export function evaluate(rule: Rule, current: Observation, previousValue: string
       return { moved, met: met && crossed(previousValue, num, (p) => p > c.value), reason: met ? `${num} is above ${c.value}` : `${num ?? cur} is not above ${c.value}` };
     }
     case "equals": {
-      const met = typeof c.value === "number" ? num === c.value : cur.toLowerCase() === String(c.value).toLowerCase();
-      return { moved, met: met && (moved || previousValue === null), reason: met ? `Equals ${c.value}` : `Is "${short(cur)}", not ${c.value}` };
+      const test = (v: string) => (typeof c.value === "number" ? parseNumber(v) === c.value : v.toLowerCase() === String(c.value).toLowerCase());
+      const met = test(cur);
+      return { moved, met: met && became(previousValue, test), reason: met ? `Equals ${c.value}` : `Is "${short(cur)}", not ${c.value}` };
     }
     case "new_item": {
       if (previousValue === null) return { moved, met: false, reason: "First observation" };
@@ -205,6 +208,12 @@ export function evaluate(rule: Rule, current: Observation, previousValue: string
       return { moved, met: fresh.length > 0, reason: fresh.length ? `New: ${short(fresh[0] ?? "")}${fresh.length > 1 ? ` (+${fresh.length - 1} more)` : ""}` : "No new items" };
     }
   }
+}
+
+/** A state condition alerts when it becomes true, not on every check while it stays true. */
+function became(previousValue: string | null, test: (v: string) => boolean): boolean {
+  if (previousValue === null) return true;
+  return !test(previousValue);
 }
 
 /** A threshold rule alerts when the condition becomes true, not on every check while it stays true. */

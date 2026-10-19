@@ -256,3 +256,17 @@ export function locateRegion(text: string, startAnchor: string, endAnchor: strin
   if (end === -1) return text.slice(start, start + 2000).trim();
   return text.slice(start, end).trim();
 }
+
+/** Drop :nth-of-type from the last segment so a selector for one list entry matches all entries. */
+export function generaliseSelector(css: string, html: string): string {
+  const parts = css.split(" > ");
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const stripped = parts[i]!.replace(/:nth-of-type\(\d+\)/, "");
+    if (stripped !== parts[i]) {
+      const candidate = [...parts.slice(0, i), stripped, ...parts.slice(i + 1)].join(" > ");
+      const hit = locateSelector(html, candidate);
+      if (hit && hit.count > 1) return candidate;
+    }
+  }
+  return css;
+}

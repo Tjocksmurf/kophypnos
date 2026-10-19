@@ -1,3 +1,5 @@
+import { initSentry, captureError } from "./sentry.js";
+initSentry("web");
 import Fastify from "fastify";
 import cookie from "@fastify/cookie";
 import rateLimit from "@fastify/rate-limit";
@@ -44,7 +46,10 @@ export async function buildServer() {
   app.setErrorHandler((err: unknown, req, reply) => {
     const e = err as { statusCode?: number; message?: string };
     const status = e.statusCode ?? 500;
-    if (status >= 500) req.log.error({ err }, "unhandled error");
+    if (status >= 500) {
+      req.log.error({ err }, "unhandled error");
+      captureError(err, { route: req.url, userId: req.user?.id ?? "" });
+    }
     void reply.code(status).send({
       error: { code: status >= 500 ? "internal" : "request_error", message: status >= 500 ? "Something went wrong." : (e.message ?? "Request error") },
     });
