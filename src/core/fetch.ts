@@ -1,5 +1,6 @@
 import { config } from "../config.js";
 import { assertPublicHost, parseUrl, UrlError } from "./url.js";
+import { looksBlocked } from "./blocked.js";
 
 export type FetchStatus = "ok" | "not_modified" | "thin" | "blocked" | "error";
 
@@ -22,28 +23,7 @@ export interface FetchOptions {
   timeoutMs?: number;
 }
 
-const BLOCK_MARKERS = [
-  /cf-browser-verification/i,
-  /cf_chl_opt/i,
-  /challenge-platform/i,
-  /__cf_chl_/i,
-  /Attention Required!\s*\|\s*Cloudflare/i,
-  /Just a moment\.\.\./i,
-  /g-recaptcha/i,
-  /h-captcha/i,
-  /are you a human/i,
-  /Access Denied/i,
-  /PerimeterX/i,
-  /_px(?:hd|vid)/i,
-  /datadome/i,
-  /Pardon Our Interruption/i,
-];
-
-export function looksBlocked(html: string, httpStatus: number | null): boolean {
-  if (httpStatus === 403 || httpStatus === 429 || httpStatus === 503) return true;
-  const head = html.slice(0, 20_000);
-  return BLOCK_MARKERS.some((re) => re.test(head));
-}
+export { looksBlocked };
 
 /**
  * Fetch a page with a browser-like request, a size cap, redirect limit and SSRF checks on every hop.

@@ -35,10 +35,18 @@ export async function pageRoutes(app: FastifyInstance): Promise<void> {
         error: { code: "fetch_failed", message: fetched.error ?? "Could not fetch that page.", http_status: fetched.httpStatus },
       });
     }
-    let page = extractPage(fetched.html, fetched.finalUrl);
     let needsBrowser = false;
+    // Bot wall on the plain fetch → a real browser often gets through; try it once.
+    if (fetched.status === "blocked") {
+      const rendered = await fetchWithBrowser(fetched.finalUrl);
+      if (rendered.status === "ok") {
+        fetched = rendered;
+        needsBrowser = true;
+      }
+    }
+    let page = extractPage(fetched.html, fetched.finalUrl);
     // Thin static DOM → the content is probably rendered client-side; try a headless browser once.
-    if (fetched.status === "ok" && page.text.length < 200) {
+    if (fetched.status === "ok" && !needsBrowser && page.text.length < 200) {
       const rendered = await fetchWithBrowser(fetched.finalUrl);
       if (rendered.status === "ok") {
         const rpage = extractPage(rendered.html, rendered.finalUrl);

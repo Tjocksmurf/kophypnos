@@ -63,6 +63,16 @@ export async function runCheck(monitorId: string, opts: { manual?: boolean } = {
   }
   let switchedToBrowser = false;
 
+  // ---- bot wall on the plain fetch: try a real browser once, switch over if it gets through
+  if (fetched.status === "blocked" && !monitor.needsBrowser) {
+    const rendered = await fetchWithBrowser(monitor.url);
+    if (rendered.status === "ok") {
+      fetched = rendered;
+      switchedToBrowser = true;
+      log.info("blocked on plain fetch; switched monitor to browser fetching");
+    }
+  }
+
   if (fetched.status === "not_modified") {
     return finish(
       { outcome: "unchanged", httpStatus: 304, fetchMs: fetched.ms, observedValue: monitor.lastValue },
